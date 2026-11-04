@@ -1,0 +1,93 @@
+name: Traducir bases de datos EN->ES con Marian (big)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  traducir:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: |
+          pip install --upgrade pip
+          pip install "ctranslate2>=3.0" transformers sentencepiece huggingface_hub
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Cachear modelo CTranslate2
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ./model
+          key: marian-opus-mt-tc-big-en-es-ct2-int8-v2
+
+      - name: Convertir modelo a CTranslate2 (solo si no está en caché)
+        run: |
+          MODEL_ID="Helsinki-NLP/opus-mt-tc-big-en-es"
+          if [ -f ./model/model.bin ]; then
+            echo "Modelo ya presente en caché, se omite la conversión."
+          else
+            ct2-transformers-converter \
+              --model "$MODEL_ID" \
+              --output_dir ./model \
+              --quantization int8
+          fi
+
+          python - <<'EOF'
+          from pathlib import Path
+          import shutil
+          from huggingface_hub import hf_hub_download
+
+          model_id = "Helsinki-NLP/opus-mt-tc-big-en-es"
+          output_dir = Path("./model")
+          output_dir.mkdir(parents=True, exist_ok=True)
+
+          # The CTranslate2 converter creates the engine files but does not
+          # guarantee that MarianTokenizer's SentencePiece/vocabulary files
+          # are present in the output directory.
+          for filename in ("source.spm", "target.spm", "vocab.json"):
+              destination = output_dir / filename
+              if destination.exists():
+                  continue
+              downloaded = hf_hub_download(repo_id=model_id, filename=filename)
+              shutil.copy2(downloaded, destination)
+          EOF
+
+      - name: Verificar modelo
+        run: |
+          python - <<'EOF'
+          import os, sys
+          required = ['model.bin', 'config.json', 'source.spm', 'target.spm', 'vocab.json']
+          missing = [f for f in required if not os.path.exists(os.path.join('./model', f))]
+          if missing:
+              sys.exit(f'ERROR: faltan archivos en ./model: {missing}')
+          print('OK: modelo CTranslate2 y tokenizer Marian presentes y completos')
+          for f in sorted(os.listdir('./model')):
+              p = os.path.join('./model', f)
+              if os.path.isfile(p):
+                  print(f'  {f}  ({os.path.getsize(p)} bytes)')
+          EOF
+
+      - name: Ejecutar traducción
+        run: |
+          python marian.py ./en -o ./es \
+            --model ./model \
+            --device cpu \
+            --compute-type int8
+
+      - name: Commit y push de los resultados
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Traducciones Marian EN->ES actualizadas automáticamente"
+          file_pattern: es/*

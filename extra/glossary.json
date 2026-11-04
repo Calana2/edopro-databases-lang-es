@@ -1,0 +1,9 @@
+[
+  {"src": "dibuja", "dst": "roba"},
+  {"src": "dibuje", "dst": "robe"},
+  {"src": "dibujar", "dst": "robar"},
+  {"src": "dibujarla", "dst": "robarla"},
+  {"src": "dibujarla", "dst": "robarla"},
+  {"src": "dibujo", "dst": "robo"},
+  {"src": "sorteo", "dst": "robo"}
+]
