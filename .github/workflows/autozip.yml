@@ -5,29 +5,28 @@ on:
     branches:
       - main
 
-  permissions:
-    content: write
+permissions:
+  contents: write
 
-  jobs:
-    zip-and-release:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout del código
-          uses: actions/checkout@v4
+jobs:
+  zip-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
 
-        - name: Crear el zip
-          run: zip -r es.zip es/*
+      - name: Crear el zip
+        run: zip -r es.zip es/*
 
-        - name: Calcular hash
-          id: hash
-          run: echo "md5=$(md5sum es.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Calcular hash
+        id: hash
+        run: echo "md5=$(md5sum es.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
-        - name: Crear/actualizar Release y subir es.zip
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          run: |
-            TAG="build-${GITHUB_SHA::7}"
-            gh release create "$TAG" es.zip \
-              --title "Build $TAG" \
-              --notes "es.zip generado desde ${GITHUB_SHA}" \
-              || gh release upload "$TAG" es.zip --clobber
+      - name: Crear/actualizar Release y subir es.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="build-${GITHUB_SHA::7}"
+          gh release create "$TAG" es.zip \
+            --title "Build $TAG" \
+            --notes "es.zip (md5: ${{ steps.hash.outputs.md5 }}) generado desde ${GITHUB_SHA}"
